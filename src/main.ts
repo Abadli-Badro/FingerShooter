@@ -44,6 +44,10 @@ let handActive = false;
 let trackingWasActive = false;
 let calibFired = false;
 let lastAimTime = 0;
+/** How long the aim pose has been held during calibration (ms). */
+let aimHeldMs = 0;
+/** Sustained aim needed to confirm tracking and start the round. */
+const CALIB_AIM_MS = 700;
 
 /* ------------------------------- helpers ------------------------------- */
 
@@ -133,7 +137,7 @@ function startRound(): void {
   mode = 'playing';
 }
 
-function endRound(): void {
+async function endRound(): Promise<void> {
   mode = 'over';
   hud.showRound(false);
   hud.showHint(false);
@@ -149,7 +153,7 @@ function endRound(): void {
     highScore: finalHigh,
     isRecord,
   });
-  screens.showOver({
+  await screens.showOver({
     score: scoring.score,
     accuracy: scoring.accuracy,
     bestStreak: scoring.bestStreak,
@@ -161,7 +165,7 @@ function endRound(): void {
     },
     onMenu: () => {
       sfx.ui();
-      backToTitle();
+      void backToTitle();
     },
   });
 }
@@ -171,7 +175,7 @@ async function playWithHand(): Promise<void> {
   sfx.ensure();
   sfx.ui();
   mode = 'loading';
-  screens.showLoading('WAKING UP THE RANGE…');
+  await screens.showLoading('WAKING UP THE RANGE…');
   try {
     if (!tracker) {
       const mod = await import('./tracking/handTracker');
@@ -180,15 +184,18 @@ async function playWithHand(): Promise<void> {
     if (!tracker.getStream()) await tracker.start();
     mode = 'calibrate';
     calibFired = false;
-    screens.showCalibrate(() => backToTitle());
+    aimHeldMs = 0;
+    // start the aim filter from wherever the hand already is, so the first
+    // shot of the round isn't smeared across the countdown fade
+    smoother.reset();
+    await screens.showCalibrate(() => void backToTitle());
   } catch {
     mode = 'title';
     tracker = null;
-    screens.showError('Camera blocked or tracking failed to load.', () => {
+    await screens.showError('Camera blocked or tracking failed to load.', () => {
       input = 'mouse';
       void startCountdownAndRound();
     });
-    return;
   }
 }
 
@@ -205,12 +212,13 @@ async function calibrateReady(): Promise<void> {
   await startCountdownAndRound();
 }
 
-function backToTitle(): void {
+async function backToTitle(): Promise<void> {
   mode = 'title';
   hud.showRound(false);
   hud.setTracking(false);
+  setTracking(false);
   gun.update(0, aim, false);
-  screens.showTitle({
+  await screens.showTitle({
     highScore: scoring.getHighScore(),
     onCamera: () => void playWithHand(),
     onMouse: () => void playWithMouse(),
@@ -220,7 +228,7 @@ function backToTitle(): void {
 /* ------------------------------ input hooks ----------------------------- */
 
 window.addEventListener('pointermove', (e) => {
-  if (input !== 'mouse') return;
+  if (input !== 'mouse' || mode !== 'playing') return;
   setAim((e.clientX / window.innerWidth) * 2 - 1, -((e.clientY / window.innerHeight) * 2 - 1));
   setTracking(true);
 });
@@ -245,19 +253,26 @@ function loop(now: number): void {
     const lm = t.poll();
     const g: GestureSnapshot = detector.update(lm, now);
     debugPane.update(lm, g);
-    if (lm) {
+    const canAim = mode === 'playing' || mode === 'countdown';
+    if (canAim && lm) {
       const smoothed = smoother.filter(g.tip.x, g.tip.y, rawDt);
       setAim(smoothed.x, smoothed.y);
       setTracking(true);
-    } else if (now - lastAimTime > 350) {
+    } else if (canAim && now - lastAimTime > 350) {
       setTracking(false);
     }
     hud.setCocked(g.cocked);
     emitter.emit('cocked', g.cocked);
 
     if (mode === 'calibrate' && !calibFired) {
-      screens.calibStatusOk(g.aiming);
-      if (g.fired) void calibrateReady();
+      if (g.aiming) {
+        aimHeldMs += rawDt * 1000;
+        // hold the aim pose briefly to confirm tracking, then drop into the round
+        if (aimHeldMs >= CALIB_AIM_MS) void calibrateReady();
+      } else {
+        aimHeldMs = 0;
+      }
+      screens.calibStatusOk(g.aiming, aimHeldMs / CALIB_AIM_MS);
     } else if (mode === 'playing' && g.fired) {
       shoot();
     }
@@ -276,13 +291,13 @@ function loop(now: number): void {
   if (mode === 'playing') {
     roundRemaining -= dt;
     hud.setTimer(Math.max(0, roundRemaining));
-    if (roundRemaining <= 0) endRound();
+    if (roundRemaining <= 0) void endRound();
   }
 
-  arena.renderer.render(arena.scene, arena.camera);
+  arena.render();
 }
 
 /* ------------------------------ boot ----------------------------------- */
 
 arena.renderer.setAnimationLoop(loop);
-backToTitle();
+void backToTitle();

@@ -50,7 +50,7 @@ export class Gun {
       const mesh = new THREE.Mesh(
         geo,
         new THREE.MeshBasicMaterial({
-          color: 0xffffff,
+          color: PALETTE.accent,
           transparent: true,
           opacity: 0,
           blending: THREE.AdditiveBlending,
@@ -71,29 +71,41 @@ export class Gun {
   }
 
   private buildViewmodel(): void {
-    const white = new THREE.MeshStandardMaterial({
+    const body = new THREE.MeshStandardMaterial({
       color: PALETTE.gun,
-      roughness: 0.35,
-      metalness: 0.1,
+      roughness: 0.55,
+      metalness: 0.25,
       flatShading: true,
     });
     const dark = new THREE.MeshStandardMaterial({
       color: PALETTE.gunDark,
       roughness: 0.6,
+      metalness: 0.3,
+      flatShading: true,
+    });
+    // emissive neon trim — kept dim so it doesn't blow out under bloom
+    const trim = new THREE.MeshStandardMaterial({
+      color: PALETTE.gunAccent,
+      emissive: PALETTE.gunAccent,
+      emissiveIntensity: 0.25,
+      roughness: 0.4,
       metalness: 0.2,
       flatShading: true,
     });
 
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.13, 0.34), white);
-    const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.3), white);
+    const bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.13, 0.34), body);
+    const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.3), body);
     barrel.position.set(0, 0.015, -0.27);
     const grip = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.17, 0.1), dark);
     grip.position.set(0, -0.13, 0.1);
     grip.rotation.x = 0.42;
-    const sight = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.035, 0.05), dark);
+    const sight = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.035, 0.05), trim);
     sight.position.set(0, 0.08, -0.1);
+    // thin cyan stripe along the top of the body
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.095, 0.012, 0.3), trim);
+    stripe.position.set(0, 0.067, 0);
 
-    this.group.add(body, barrel, grip, sight);
+    this.group.add(bodyMesh, barrel, grip, sight, stripe);
 
     this.muzzle.position.set(0, 0.015, -0.45);
     this.group.add(this.muzzle);
@@ -101,7 +113,7 @@ export class Gun {
     this.flash = new THREE.Mesh(
       new THREE.IcosahedronGeometry(0.075, 0),
       new THREE.MeshBasicMaterial({
-        color: 0xfff3d6,
+        color: PALETTE.flash,
         transparent: true,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
@@ -110,7 +122,7 @@ export class Gun {
     this.flash.visible = false;
     this.muzzle.add(this.flash);
 
-    this.flashLight = new THREE.PointLight(0xfff3d6, 0, 7);
+    this.flashLight = new THREE.PointLight(PALETTE.flash, 0, 7);
     this.muzzle.add(this.flashLight);
 
     this.group.position.copy(this.basePos);

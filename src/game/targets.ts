@@ -46,20 +46,26 @@ export class Targets {
     this.mats = {
       standard: new THREE.MeshStandardMaterial({
         color: PALETTE.accent,
-        roughness: 0.55,
-        metalness: 0,
+        emissive: PALETTE.accent,
+        emissiveIntensity: 0.7,
+        roughness: 0.35,
+        metalness: 0.1,
         flatShading: true,
       }),
       fast: new THREE.MeshStandardMaterial({
         color: PALETTE.fast,
-        roughness: 0.45,
-        metalness: 0,
+        emissive: PALETTE.fast,
+        emissiveIntensity: 0.8,
+        roughness: 0.3,
+        metalness: 0.1,
         flatShading: true,
       }),
       hazard: new THREE.MeshStandardMaterial({
         color: PALETTE.hazard,
-        roughness: 0.8,
-        metalness: 0.1,
+        emissive: PALETTE.hazardEmissive,
+        emissiveIntensity: 1.2,
+        roughness: 0.5,
+        metalness: 0.2,
         flatShading: true,
       }),
     };

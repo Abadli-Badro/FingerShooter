@@ -47,8 +47,8 @@ export class Hud {
         <div class="bar"><div class="fill"></div></div>
         <div class="secs">0.0s</div>
       </div>
-      <div class="hud-hint">POINT YOUR INDEX FINGER — SNAP YOUR THUMB TO FIRE</div>
-      <div class="hud-hand">NO HAND</div>`;
+      <div class="hud-hint">&gt; POINT INDEX FINGER — SNAP THUMB TO FIRE</div>
+      <div class="hud-hand">[ NO HAND DETECTED ]</div>`;
 
     this.root.appendChild(this.reticle);
     this.root.appendChild(this.hud);
@@ -90,7 +90,7 @@ export class Hud {
     const became = mult > this.lastCombo;
     this.lastCombo = mult;
     if (mult > 1) {
-      this.comboEl.textContent = `COMBO ×${mult}`;
+      this.comboEl.textContent = `[ CHAIN ×${mult} ]`;
       this.comboEl.classList.add('show');
       if (became) {
         this.comboEl.classList.remove('pop');

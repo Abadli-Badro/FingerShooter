@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TUNING } from './config';
+import { PALETTE, TUNING } from './config';
 import type { TargetKind } from '../core/events';
 
 interface Particle {
@@ -85,7 +85,8 @@ export class Juice {
   }
 
   burst(point: THREE.Vector3, kind: TargetKind): void {
-    const color = kind === 'standard' ? 0xff5050 : kind === 'fast' ? 0xff8a63 : 0x2e3d4f;
+    const color =
+      kind === 'standard' ? PALETTE.accent : kind === 'fast' ? PALETTE.fast : PALETTE.hazardEmissive;
     const n = kind === 'fast' ? 18 : 14;
     for (let i = 0; i < n; i++) {
       const p = this.particles[this.nextParticle];

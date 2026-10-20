@@ -1,12 +1,18 @@
 export const PALETTE = {
-  bg: 0xf4f1ea,
-  ground: 0xe9e4d9,
-  props: [0xdcd6c8, 0xd0cabe, 0xbfb8a8, 0xefece3],
-  accent: 0xff5050,
-  fast: 0xff8a63,
-  hazard: 0x2e3d4f,
-  gun: 0xffffff,
-  gunDark: 0x2a2723,
+  // VR simulation / terminal
+  bg: 0x020604,
+  ground: 0x03140a,
+  grid: 0x00ff6a,
+  gridDim: 0x0a7a3c,
+  sun: 0x00ff6a,
+  accent: 0x00ff6a,
+  fast: 0xb8ff3a,
+  hazard: 0xff3355,
+  hazardEmissive: 0xff2244,
+  gun: 0x0a1a10,
+  gunDark: 0x061008,
+  gunAccent: 0x0f8a44,
+  flash: 0x9dffc4,
 } as const;
 
 export const TUNING = {
