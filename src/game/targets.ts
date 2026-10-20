@@ -15,7 +15,7 @@ interface Motion {
 interface Target {
   id: number;
   kind: TargetKind;
-  mesh: THREE.Mesh;
+  mesh: THREE.Object3D;
   motion: Motion;
   age: number;
   life: number;
@@ -25,8 +25,23 @@ interface Target {
 
 let nextId = 0;
 
+const HAZARD_SPIKE_DIRS: THREE.Vector3[] = [
+  new THREE.Vector3(1, 0, 0),
+  new THREE.Vector3(-1, 0, 0),
+  new THREE.Vector3(0, 1, 0),
+  new THREE.Vector3(0, -1, 0),
+  new THREE.Vector3(0, 0, 1),
+  new THREE.Vector3(0, 0, -1),
+  new THREE.Vector3(1, 1, 1),
+  new THREE.Vector3(-1, 1, -1),
+  new THREE.Vector3(1, -1, -1),
+  new THREE.Vector3(-1, -1, 1),
+];
+
 /**
- * Spawns and animates the low-poly targets drifting through the range.
+ * Spawns and animates the low-poly data constructs drifting through the range.
+ * Each target is a small group — a solid emissive core inside a wireframe
+ * cage — so hits read as "corrupting a program" rather than popping a ball.
  * Owns the spawn director (difficulty ramps with round elapsed time).
  */
 export class Targets {
@@ -35,15 +50,11 @@ export class Targets {
   private byMesh = new Map<THREE.Object3D, Target>();
   private spawnTimer = 0;
 
-  private mats: Record<TargetKind, THREE.MeshStandardMaterial>;
-  private geos: Record<TargetKind, THREE.BufferGeometry> = {
-    standard: new THREE.OctahedronGeometry(0.72),
-    fast: new THREE.IcosahedronGeometry(0.42, 0),
-    hazard: new THREE.OctahedronGeometry(0.8),
-  };
+  private cores: Record<TargetKind, THREE.MeshStandardMaterial>;
+  private shells: Record<TargetKind, THREE.MeshBasicMaterial>;
 
   constructor(scene: THREE.Scene) {
-    this.mats = {
+    this.cores = {
       standard: new THREE.MeshStandardMaterial({
         color: PALETTE.accent,
         emissive: PALETTE.accent,
@@ -69,8 +80,23 @@ export class Targets {
         flatShading: true,
       }),
     };
+    this.shells = {
+      standard: this.shellMat(PALETTE.accent, 0.75),
+      fast: this.shellMat(PALETTE.fast, 0.8),
+      hazard: this.shellMat(PALETTE.hazard, 0.9),
+    };
     this.group.name = 'targets';
     scene.add(this.group);
+  }
+
+  private shellMat(color: number, opacity: number): THREE.MeshBasicMaterial {
+    return new THREE.MeshBasicMaterial({
+      color,
+      wireframe: true,
+      transparent: true,
+      opacity,
+      depthWrite: false,
+    });
   }
 
   get alive(): number {
@@ -124,6 +150,42 @@ export class Targets {
     }
   }
 
+  /** Builds the composite body for a kind: solid core + wireframe shell. */
+  private makeBody(kind: TargetKind): THREE.Object3D {
+    const g = new THREE.Group();
+    const core = this.cores[kind];
+
+    if (kind === 'standard') {
+      // data crate: octahedral core inside a triangulated wireframe cube
+      const octa = new THREE.Mesh(new THREE.OctahedronGeometry(0.55), core);
+      const cage = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.3, 1.3), this.shells[kind]);
+      octa.castShadow = true;
+      g.add(octa, cage);
+    } else if (kind === 'fast') {
+      // packet: tight sharp core in a faceted shell
+      const ico = new THREE.Mesh(new THREE.IcosahedronGeometry(0.3, 0), core);
+      const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(0.46, 0), this.shells[kind]);
+      ico.castShadow = true;
+      g.add(ico, shell);
+    } else {
+      // firewall virus: spiked core in a red wireframe shell
+      const ico = new THREE.Mesh(new THREE.IcosahedronGeometry(0.4, 1), core);
+      const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(0.6, 0), this.shells[kind]);
+      ico.castShadow = true;
+      g.add(ico, shell);
+      const spikeGeo = new THREE.ConeGeometry(0.11, 0.44, 4);
+      const up = new THREE.Vector3(0, 1, 0);
+      for (const d of HAZARD_SPIKE_DIRS) {
+        const dir = d.clone().normalize();
+        const spike = new THREE.Mesh(spikeGeo, core);
+        spike.quaternion.setFromUnitVectors(up, dir);
+        spike.position.copy(dir).multiplyScalar(0.48);
+        g.add(spike);
+      }
+    }
+    return g;
+  }
+
   private spawn(difficulty: number): void {
     const roll = Math.random();
     let kind: TargetKind = 'standard';
@@ -134,8 +196,7 @@ export class Targets {
     const fast = kind === 'fast';
     const hazard = kind === 'hazard';
 
-    const mesh = new THREE.Mesh(this.geos[kind], this.mats[kind]);
-    mesh.castShadow = true;
+    const mesh = this.makeBody(kind);
     const scale = 0.85 + Math.random() * 0.35;
     mesh.scale.setScalar(scale);
     if (hazard) mesh.rotation.z = Math.PI / 4;
@@ -195,7 +256,7 @@ export class Targets {
     );
   }
 
-  /** Consume the mesh that was just shot; returns its data or null. */
+  /** Consume the target that was just shot; returns its data or null. */
   consume(mesh: THREE.Object3D): { id: number; kind: TargetKind } | null {
     const t = this.byMesh.get(mesh);
     if (!t) return null;

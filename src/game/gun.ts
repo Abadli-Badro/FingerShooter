@@ -73,14 +73,14 @@ export class Gun {
   private buildViewmodel(): void {
     const body = new THREE.MeshStandardMaterial({
       color: PALETTE.gun,
-      roughness: 0.55,
-      metalness: 0.25,
+      roughness: 0.45,
+      metalness: 0.4,
       flatShading: true,
     });
     const dark = new THREE.MeshStandardMaterial({
       color: PALETTE.gunDark,
-      roughness: 0.6,
-      metalness: 0.3,
+      roughness: 0.55,
+      metalness: 0.45,
       flatShading: true,
     });
     // emissive neon trim — kept dim so it doesn't blow out under bloom
@@ -92,22 +92,116 @@ export class Gun {
       metalness: 0.2,
       flatShading: true,
     });
+    // hotter trim for the muzzle ring / emitter
+    const hot = new THREE.MeshStandardMaterial({
+      color: PALETTE.gunAccent,
+      emissive: PALETTE.gunAccent,
+      emissiveIntensity: 0.5,
+      roughness: 0.4,
+      metalness: 0.2,
+      flatShading: true,
+    });
 
-    const bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.13, 0.34), body);
-    const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.3), body);
-    barrel.position.set(0, 0.015, -0.27);
-    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.17, 0.1), dark);
-    grip.position.set(0, -0.13, 0.1);
-    grip.rotation.x = 0.42;
-    const sight = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.035, 0.05), trim);
-    sight.position.set(0, 0.08, -0.1);
-    // thin cyan stripe along the top of the body
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.095, 0.012, 0.3), trim);
-    stripe.position.set(0, 0.067, 0);
+    const add = (
+      parent: THREE.Object3D,
+      geo: THREE.BufferGeometry,
+      mat: THREE.Material,
+      x: number,
+      y: number,
+      z: number,
+      rx = 0,
+      ry = 0,
+      rz = 0,
+    ): THREE.Mesh => {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, z);
+      m.rotation.set(rx, ry, rz);
+      parent.add(m);
+      return m;
+    };
 
-    this.group.add(bodyMesh, barrel, grip, sight, stripe);
+    const g = this.group;
 
-    this.muzzle.position.set(0, 0.015, -0.45);
+    // --- frame: one extruded angular silhouette with skeletonized cutouts ---
+    const s = new THREE.Shape();
+    s.moveTo(-0.22, 0.11); // rear top
+    s.lineTo(0.18, 0.11); // slide top front
+    s.lineTo(0.32, 0.02); // aggressive chin point
+    s.lineTo(0.32, -0.01); // chin bottom
+    s.lineTo(0.1, -0.03); // frame underside
+    s.lineTo(-0.01, -0.045); // in front of trigger pocket
+    s.lineTo(-0.05, -0.3); // grip front, raked
+    s.lineTo(-0.15, -0.32); // grip bottom
+    s.lineTo(-0.21, -0.3); // grip bottom rear
+    s.lineTo(-0.17, -0.09); // back strap
+    s.lineTo(-0.26, -0.04); // beavertail
+    s.lineTo(-0.26, 0.05); // rear slide bottom
+    s.closePath();
+
+    // slide window — the glowing energy core shows through it
+    const window = new THREE.Path();
+    window.moveTo(0.0, 0.03);
+    window.lineTo(0.0, 0.09);
+    window.lineTo(0.15, 0.09);
+    window.lineTo(0.15, 0.03);
+    window.closePath();
+    s.holes.push(window);
+
+    // skeletonized grip slot
+    const gripSlot = new THREE.Path();
+    gripSlot.moveTo(-0.16, -0.11);
+    gripSlot.lineTo(-0.16, -0.24);
+    gripSlot.lineTo(-0.06, -0.24);
+    gripSlot.lineTo(-0.06, -0.11);
+    gripSlot.closePath();
+    s.holes.push(gripSlot);
+
+    const frameGeo = new THREE.ExtrudeGeometry(s, {
+      depth: 0.085,
+      bevelEnabled: true,
+      bevelThickness: 0.007,
+      bevelSize: 0.007,
+      bevelSegments: 1,
+      steps: 1,
+    });
+    frameGeo.rotateY(Math.PI / 2);
+    frameGeo.translate(-0.0425, 0, 0);
+    add(g, frameGeo, body, 0, 0, 0);
+
+    // --- energy core behind the slide window + cell inside the grip slot ---
+    add(g, new THREE.BoxGeometry(0.062, 0.05, 0.14), trim, 0, 0.06, -0.075);
+    add(g, new THREE.BoxGeometry(0.06, 0.05, 0.095), trim, 0, -0.175, 0.1, -0.16);
+
+    // --- barrel: hex shroud + hex energy ring + emitter orb ---
+    const shroud = new THREE.CylinderGeometry(0.027, 0.027, 0.16, 6);
+    shroud.rotateX(Math.PI / 2);
+    add(g, shroud, dark, 0, 0.005, -0.38);
+    add(g, new THREE.TorusGeometry(0.04, 0.011, 4, 6), hot, 0, 0.005, -0.465);
+    add(g, new THREE.IcosahedronGeometry(0.023, 0), hot, 0, 0.005, -0.472);
+
+    // --- side details: power strips + vents on both flanks ---
+    for (const x of [0.052, -0.052]) {
+      add(g, new THREE.BoxGeometry(0.01, 0.013, 0.3), trim, x, 0.095, -0.03);
+      add(g, new THREE.BoxGeometry(0.01, 0.013, 0.035), trim, x, 0.055, -0.17);
+      add(g, new THREE.BoxGeometry(0.01, 0.013, 0.035), trim, x, 0.055, -0.215);
+    }
+
+    // --- trigger guard (hexagonal half-loop) + glowing trigger ---
+    const guard = new THREE.TorusGeometry(0.055, 0.011, 4, 8, Math.PI);
+    guard.rotateZ(Math.PI);
+    guard.rotateY(Math.PI / 2);
+    add(g, guard, body, 0, -0.045, -0.03);
+    add(g, new THREE.BoxGeometry(0.015, 0.045, 0.013), trim, 0, -0.068, -0.05, -0.35);
+
+    // --- sights: angular rear block with pip + front post ---
+    add(g, new THREE.BoxGeometry(0.05, 0.022, 0.035), dark, 0, 0.121, 0.155);
+    add(g, new THREE.BoxGeometry(0.012, 0.008, 0.012), trim, 0, 0.134, 0.152);
+    add(g, new THREE.BoxGeometry(0.013, 0.02, 0.02), trim, 0, 0.12, -0.155);
+
+    // --- rear charging fin ---
+    add(g, new THREE.BoxGeometry(0.026, 0.05, 0.06), trim, 0, 0.128, 0.205, -0.55);
+
+    this.muzzle.position.set(0, 0.005, -0.48);
     this.group.add(this.muzzle);
 
     this.flash = new THREE.Mesh(
@@ -186,8 +280,14 @@ export class Gun {
 
     this.ndc.set(ndc.x, ndc.y);
     this.raycaster.setFromCamera(this.ndc, this.camera);
-    const hits = this.raycaster.intersectObjects(targetMeshes, false);
-    const hit = hits.length > 0 ? hits[0] : null;
+    const hits = this.raycaster.intersectObjects(targetMeshes, true);
+    let hit = hits.length > 0 ? hits[0] : null;
+    if (hit) {
+      // targets are groups; climb to the root that carries targetId
+      let root: THREE.Object3D | null = hit.object;
+      while (root && root.userData.targetId === undefined) root = root.parent;
+      hit = root ? { ...hit, object: root } : null;
+    }
 
     const origin = this.muzzle.getWorldPosition(new THREE.Vector3());
     const end = hit ? hit.point.clone() : this.raycaster.ray.at(TUNING.tracerMaxLength, new THREE.Vector3());
